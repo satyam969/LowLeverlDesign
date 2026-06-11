@@ -1,0 +1,155 @@
+# Elevator System Design Document
+
+## 1. High Level Architecture
+
+The system follows a typical Object-Oriented design with a clear separation of concerns:
+1.  **ElevatorSystem (Controller)**: Manages all elevators and dispatches external requests.
+2.  **Elevator (Worker/Entity)**: Represents a physical elevator car with its own state (Floor, Direction) and request queue. Runs on an independent thread.
+3.  **Strategy (Algorithm)**: Pluggable logic for deciding which floor to visit next.
+4.  **Request (Data)**: Represents user intent (Internal button press or External floor call).
+
+## 2. Class Diagram
+
+```mermaid
+classDiagram
+    class ElevatorSystem {
+        -List~Elevator~ elevators
+        +addRequest(Request req)
+        +assignElevator(ExternalRequest req)
+        +start()
+    }
+
+    class Elevator {
+        -int id
+        -Floor currentFloor
+        -ElevatorState state
+        -ElevatorDirection direction
+        -Set~Floor~ pendingRequests
+        -ElevatorStrategy strategy
+        +move()
+        +addRequest(Floor floor)
+        +run()
+    }
+
+    class ElevatorStrategy {
+        <<interface>>
+        +getNextFloor(Elevator elevator) Floor
+    }
+
+    class LookStrategy {
+        +getNextFloor(Elevator elevator) Floor
+    }
+    class ScanStrategy {
+        +getNextFloor(Elevator elevator) Floor
+    }
+    class NearestFirstStrategy {
+        +getNextFloor(Elevator elevator) Floor
+    }
+
+    class Request {
+        <<interface>>
+    }
+
+    class ExternalRequest {
+        -Floor sourceFloor
+        -ElevatorDirection direction
+    }
+
+    class InternalRequest {
+        -Floor destinationFloor
+        -int elevatorId
+    }
+
+    ElevatorSystem "1" *-- "*" Elevator
+    Elevator "1" --> "1" ElevatorStrategy
+    ElevatorStrategy <|.. LookStrategy
+    ElevatorStrategy <|.. ScanStrategy
+    ElevatorStrategy <|.. NearestFirstStrategy
+    Request <|.. ExternalRequest
+    Request <|.. InternalRequest
+```
+
+## 3. Sequence Diagram (Request Booking)
+
+**Scenario**: A user presses the "UP" button on Floor 1. The Controller assigns it to Elevator 1.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant ElevatorSystem
+    participant Elevator1
+    participant Strategy
+
+    User->>ElevatorSystem: addRequest(ExternalRequest(Floor 1, UP))
+    ElevatorSystem->>ElevatorSystem: findBestElevator(req)
+    ElevatorSystem->>Elevator1: addRequest(Floor 1)
+    
+    Note over Elevator1: Elevator Thread Running
+    loop Processing
+        Elevator1->>Strategy: getNextFloor(this)
+        Strategy-->>Elevator1: Return Floor 1
+        Elevator1->>Elevator1: Move to Floor 1
+        Elevator1->>User: Open Doors / Notify Arrival
+    end
+```
+
+## 4. Elevator State Diagram
+
+Detailed view of the [Elevator](file:///c:/Users/satya/Desktop/lld/ElevatorSystem/entities/Elevator.java#5-29) entity's lifecycle.
+
+```mermaid
+stateDiagram-v2
+    [*] --> IDLE
+    IDLE --> MOVING_UP : Request Above
+    IDLE --> MOVING_DOWN : Request Below
+    
+    MOVING_UP --> STOPPED : Arrived at Floor
+    MOVING_DOWN --> STOPPED : Arrived at Floor
+    
+    STOPPED --> IDLE : No more requests
+    STOPPED --> MOVING_UP : More requests above
+    STOPPED --> MOVING_DOWN : More requests below
+```
+
+## 5. Concurrency Model
+
+*   **Elevator Threads**: Each [Elevator](file:///c:/Users/satya/Desktop/lld/ElevatorSystem/entities/Elevator.java#5-29) instance implements `Runnable` and runs in its own thread. This allows multiple elevators to move simultaneously without blocking each other.
+*   **Synchronization**:
+    *   [addRequest()](file:///c:/Users/satya/Desktop/lld/ElevatorSystem/ElevatorSystem.java#20-23) must be synchronized to prevent race conditions when the [ElevatorSystem](file:///c:/Users/satya/Desktop/lld/ElevatorSystem/ElevatorSystem.java#9-24) adds a request while the [Elevator](file:///c:/Users/satya/Desktop/lld/ElevatorSystem/entities/Elevator.java#5-29) is processing one.
+
+## 6. Detailed Request Flow
+
+How the system ensures every request is processed efficiently:
+
+### A. Receiving Requests
+1.  **User Action**: A user presses an UP/DOWN button on a floor (External Request).
+2.  **System Entry**: `ElevatorSystem.addRequest()` receives the request.
+3.  **Dispatching**: The [ElevatorSystem](file:///c:/Users/satya/Desktop/lld/ElevatorSystem/ElevatorSystem.java#9-24) implements a `DispatchStrategy` (e.g., Round Robin, Least Load, or Nearest Directional) to select the best [Elevator](file:///c:/Users/satya/Desktop/lld/ElevatorSystem/entities/Elevator.java#5-29) for the job.
+4.  **Enqueuing**: The selected [Elevator](file:///c:/Users/satya/Desktop/lld/ElevatorSystem/entities/Elevator.java#5-29)'s [addRequest()](file:///c:/Users/satya/Desktop/lld/ElevatorSystem/ElevatorSystem.java#20-23) method is called. This method is **synchronized** (or uses a `BlockingQueue`) to safely add the floor to the elevator's internal `pendingRequests` set.
+
+### B. Elevator Processing Loop (The `run()` method)
+Each Elevator runs an infinite loop in its own thread:
+1.  **Check Pending**: The elevator checks its `pendingRequests` queue.
+2.  **Wait if Empty**: If no requests are pending, the thread `wait()`s or sleeps, conserving CPU resources until a new request wakes it up (`notify()`).
+3.  **Determine Next Step**: If requests exist, it calls `strategy.getNextFloor(this)`.
+    *   **SCAN**: Returns the next floor in the current direction. If none, checks the opposite direction.
+    *   **LOOK**: Similar to SCAN but reverses direction immediately if no more requests ahead.
+    *   **Nearest First**: Scans all pending requests and picks the one with the smallest distance `abs(current - target)`.
+4.  **Move**: The elevator simulates movement by `Thread.sleep(1000)` for each floor it passes.
+5.  **Serve**: Upon reaching the target floor:
+    *   The request is removed from `pendingRequests`.
+    *   Doors open (simulated delay).
+    *   Request is marked as completed.
+
+### C. Ensuring No Request is Lost
+1.  **Thread-Safe Collections**: We use `ConcurrentSkipListSet` or `PriorityBlockingQueue` for `pendingRequests`. This ensures that even if a new request comes in *while* the elevator is calculating its next move, the request is safely added to the queue.
+2.  **Atomic State Changes**: The `ElevatorState` (IDLE, MOVING) is updated atomically.
+3.  **Synchronization**: Critical sections (like checking the queue size and then waiting) are synchronized to prevent "missed signals" (where a notify happens before the wait).
+
+### D. Why Nearest First Can Be Problematic (Starvation)
+*   **Scenario**: Elevator is at Floor 1. Request A comes for Floor 2. Elevator starts moving to 2.
+*   **Interruption**: Request B comes for Floor 1.
+*   **Nearest First**: Distance(1->1) < Distance(1->2). Elevator stops at 1 again. 
+*   **Result**: If multiple people keep pressing buttons at Floor 1, the person waiting at Floor 100 might never get served.
+*   **Fix**: **SCAN/LOOK** algorithms prevent this by guaranteeing the elevator continues in one direction until all requests in that direction are served.
+

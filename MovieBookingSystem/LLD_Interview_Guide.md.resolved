@@ -1,0 +1,34 @@
+# LLD Interview Guide: Movie Booking System Optimizations
+
+This guide outlines advanced topics and optimizations for a Movie Booking System, specifically tailored for college graduates preparing for LLD interviews in India.
+
+## 1. Concurrency & Locking Strategies
+Handling multiple users trying to book the same seat is the #1 interview question for this system.
+
+-   **Optimistic Locking:** Use a version number in the database. When updating, check if the version matches. Good for low contention.
+-   **Pessimistic Locking:** Lock the row in the database (`SELECT ... FOR UPDATE`). Good for high contention but affects performance.
+-   **Distributed Locking:** In a microservices world, use Redis (Redlock) or Zookeeper to lock a seat ID across multiple server instances.
+-   **Timed Locks (Implemented):** Reserve seats temporarily (e.g., 5-10 mins) while payment is processing. Release if timeout occurs.
+
+## 2. Database Design & Scalability
+-   **Sharding:** Shard the database by City or Region since bookings are geo-specific.
+-   **Read/Write Splitting:** Use a Master-Slave architecture. Bookings go to Master, extensive searches/listings come from Slaves.
+-   **Caching:** extensively cache "Static" data (Movie details, Theater lists) and "Semi-Static" data (Showtimes) in Redis. Only "Seat Availability" needs to be real-time.
+
+## 3. Design Patterns
+Demonstrate your knowledge of standard patterns:
+-   **Strategy Pattern:** For dynamic pricing (Weekend pricing, Afternoon pricing) or Payment methods.
+-   **State Pattern:** Managing Booking Life-cycle (`Created` -> `Reserved` -> `Confirmed` / [Expired](file:///c:/Users/satya/Desktop/lld/MovieBookingSystem/model/Booking.java#19-22)).
+-   **Observer Pattern:** For notifying users (Email/SMS) when a booking is confirmed or a waitlisted seat becomes available.
+-   **Factory Pattern:** For creating different types of key entities (e.g., creating varying [Seat](file:///c:/Users/satya/Desktop/lld/MovieBookingSystem/model/Seat.java#3-21) types like VIP, Regular).
+
+## 4. API & System Design
+-   **Idempotency:** Ensure the "Pay" API is idempotent so retrying a failed network request doesn't charge the user twice.
+-   **Rate Limiting:** Protect your booking API from bots trying to hoard tickets.
+-   **Soft Deletes:** Never delete cancelled bookings; mark them as cancelled for audit logs.
+
+## 5. Machine Coding Tips (India Focus)
+-   **Separation of Concerns:** Keep your `Service` layer separate from your `Model` layer.
+-   **Input Validation:** Always validate inputs (invalid seat IDs, past dates).
+-   **Exception Handling:** Create custom exceptions (`SeatAlreadyBookedException`, `BookingExpiredException`) rather than generic RuntimeExceptions.
+-   **Thread Safety:** If using in-memory data structures (like this codebase), ensures maps/lists are thread-safe (`ConcurrentHashMap`).

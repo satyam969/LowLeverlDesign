@@ -1,0 +1,115 @@
+# Vending Machine System Design
+
+## 1. State Machine Diagram
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> HasMoney : insertRupee()
+    HasMoney --> HasMoney : insertRupee()
+    HasMoney --> Dispensing : selectProduct(id, qty) [balance >= total AND reserveStock()]
+    HasMoney --> Idle : refund()
+    Dispensing --> Idle : dispense() [Success -> confirmStock()]
+    Dispensing --> Idle : abort() [Fail -> releaseStock()]
+    Dispensing --> Idle : cancel() [Manual -> releaseStock()]
+    Dispensing --> HasMoney : selectProduct() [balance < price]
+    Idle --> SoldOut : inventoryEmpty
+```
+
+## 2. Class Diagram
+
+```mermaid
+classDiagram
+    class VendingMachine {
+        -State currentState
+        -Inventory inventory
+        -CashInventory cashInventory
+        -List~Coin~ currentBalance
+        -int selectedProductId
+        -int selectedQuantity
+        -ReentrantLock lock
+        +VendingMachine()
+        +VendingMachine(Inventory inventory)
+        +setState(State state)
+        +insertCoin(Coin coin)
+        +selectProduct(int productId, int quantity)
+        +refund()
+        +dispense()
+    }
+
+    class State {
+        <<interface>>
+        +insertCoin(VendingMachine vm, Coin coin)
+        +selectProduct(VendingMachine vm, int productId, int quantity)
+        +refund(VendingMachine vm)
+        +dispense(VendingMachine vm)
+    }
+
+    class IdleState {
+    }
+
+    class HasMoneyState {
+    }
+
+    class DispensingState {
+        -ChangeStrategy changeStrategy
+    }
+
+    class Inventory {
+        -Map~Integer, Product~ products
+        -Map~Integer, Integer~ stock
+        -Map~Integer, Integer~ reservations
+        +hasProduct(int productId, int quantity)
+        +reserveStock(int productId, int quantity)
+        +confirmStock(int productId, int quantity)
+        +releaseStock(int productId, int quantity)
+    }
+
+    class CashInventory {
+        -Map~Coin, Integer~ cashStore
+        +addCoins(List~Coin~)
+        +deductCoin(Coin coin)
+        +getTotalValue()
+    }
+
+    VendingMachine *-- State
+    VendingMachine *-- Inventory
+    VendingMachine *-- CashInventory
+    State <|.. IdleState
+    State <|.. HasMoneyState
+    State <|.. DispensingState
+```
+
+## 3. Design Justification
+*   **State Pattern**: Distributes logic across granular states, removing conditional bloat in the controller.
+*   **Stock Reservation**: Prevents over-selling in multi-screen/distributed environments by "holding" items during the payment phase.
+*   **Mutual Exclusion**: Uses `ReentrantLock` for machine-level consistency and `synchronized` blocks for inventory-level atomic operations.
+
+## 4. Interaction Sequence Diagram (Reservation Flow)
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant VM as VendingMachine
+    participant HasM as HasMoneyState
+    participant Disp as DispensingState
+    participant Inv as Inventory
+
+    Note over User, Inv: Multi-Quantity Purchase with Reservation
+    
+    User->>VM: insertCoin(INR_100)
+    VM-->>User: Balance: 100
+    
+    User->>VM: selectProduct(SAMOSA_ID, 3)
+    VM->>HasM: selectProduct(vm, SAMOSA, 3)
+    HasM->>Inv: reserveStock(SAMOSA_ID, 3)
+    Inv-->>HasM: true (Success)
+    HasM-->>VM: setState(DispensingState)
+    
+    User->>VM: dispenseProduct()
+    VM->>Disp: dispenseProduct(vm)
+    Disp->>Inv: confirmStock(SAMOSA_ID, 3)
+    Disp-->>VM: fulfillPayment()
+    Disp-->>VM: setState(IdleState)
+    VM-->>User: "Dispensed: 3 x Samosa"
+```

@@ -1,0 +1,62 @@
+# Elevator System Implementation Walkthrough
+
+## 1. Overview
+We have implemented a multi-threaded Elevator System with pluggable scheduling strategies. The system supports:
+*   **Concurrency**: Each elevator runs on its own thread.
+*   **Strategies**: `LOOK`, `SCAN`, and `Nearest First` algorithms.
+*   **Dispatching**: Central controller assigns requests to the best available elevator.
+
+## 2. Key Components Created
+
+### A. Strategies (`strategy` package)
+*   **LookStrategy**: Continues in current direction until no more requests, then reverses. (Most efficient for real-world).
+*   **ScanStrategy**: Moves all the way to top/bottom before reversing (Simple but can be inefficient).
+*   **NearestFirstStrategy**: Picks the closest request (Can cause starvation).
+
+### B. Elevator Entity ([entities/Elevator.java](file:///c:/Users/satya/Desktop/lld/ElevatorSystem/entities/Elevator.java))
+*   Implements `Runnable`.
+*   Uses `synchronized` blocks and `wait/notify` to handle requests safely.
+*   Simulates movement floor-by-floor ([moveOneFloorTowards](file:///c:/Users/satya/Desktop/lld/ElevatorSystem/entities/Elevator.java#70-89)) to allow handling intermediate requests.
+
+### C. System Controller ([ElevatorSystem.java](file:///c:/Users/satya/Desktop/lld/ElevatorSystem/ElevatorSystem.java))
+*   Manages multiple elevators.
+*   Dispatches external requests based on "Nearest Neighbor" logic.
+
+## 3. Verification Results
+
+We ran [ElevatorSimulation.java](file:///c:/Users/satya/Desktop/lld/ElevatorSystem/ElevatorSimulation.java) with 3 elevators using different strategies.
+
+### Scenario: Interrupted Movement (LOOK Strategy)
+Elevator 0 was moving UP to Floor 10. A request came for Floor 1 (DOWN).
+**Expected Behavior**: Elevator finishes going UP to 10 (LOOK), then comes down to 1.
+
+**Actual Logs**:
+```text
+[Elevator 0] Request added for Floor 10
+[Elevator 0] Reached Floor 1
+--- sending request: Floor 1 DOWN ---
+[System] Dispatching Floor 1 request to Elevator 0
+[Elevator 0] Request added for Floor 1
+...
+[Elevator 0] Reached Floor 10
+...
+[Elevator 0] Reached Floor 9
+...
+[Elevator 0] Reached Floor 1
+```
+The elevator correctly prioritized direction over proximity (LOOK behavior), preventing the "oscillation" issue of Nearest First.
+
+### Scenario: Idle Dispatch
+Elevator 2 was IDLE at Floor 5. Request came for Floor 5.
+**Logs**:
+```text
+[System] Dispatching Floor 5 request to Elevator 2
+[Elevator 2] Request added for Floor 5
+[Elevator 2] Doors Opening at Floor 5
+```
+Handled instantly.
+
+## 4. How to Run
+1.  Navigate to [ElevatorSystem](file:///c:/Users/satya/Desktop/lld/ElevatorSystem/ElevatorSystem.java#10-72) directory.
+2.  Compile: `javac entities/*.java enums/*.java interfaces/*.java requests/*.java strategy/*.java ElevatorSystem.java ElevatorSimulation.java`
+3.  Run: `java ElevatorSimulation`

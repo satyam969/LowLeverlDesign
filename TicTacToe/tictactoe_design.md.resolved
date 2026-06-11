@@ -1,0 +1,85 @@
+# Tic-Tac-Toe System Design
+
+## 1. Class Diagram
+
+```mermaid
+classDiagram
+    class Game {
+        -Board board
+        -Deque~Player~ players
+        -List~WinningStrategy~ strategies
+        -GameState state
+        +play()
+        +undo()
+    }
+
+    class Board {
+        -int size
+        -Cell[][] cells
+        +applyMove(Move move)
+        +undoMove(Move move)
+    }
+
+    class Player {
+        <<abstract>>
+        -String name
+        -Symbol symbol
+        +makeMove(Board board) Move
+    }
+
+    class HumanPlayer {
+        +makeMove(Board board) Move
+    }
+
+    class BotPlayer {
+        -BotPlayingStrategy strategy
+        +makeMove(Board board) Move
+    }
+
+    class WinningStrategy {
+        <<interface>>
+        +checkWinner(Board board, Move move) boolean
+    }
+
+    class OrderOneWinningStrategy {
+        -Map~row, count~ rowCounts
+        -Map~col, count~ colCounts
+        +checkWinner(Board board, Move move) boolean
+    }
+    
+    class BotPlayingStrategy {
+        <<interface>>
+        +decideMove(Board board) Move
+    }
+
+    Game *-- Board
+    Game *-- Player
+    Game *-- WinningStrategy
+    Player <|-- HumanPlayer
+    Player <|-- BotPlayer
+    BotPlayer *-- BotPlayingStrategy
+    WinningStrategy <|.. OrderOneWinningStrategy
+```
+
+## 2. Optimized Winning ALgorithm (OrderOneWinningStrategy)
+
+Instead of iterating the whole board [O(N)](file:///c:/Users/satya/Desktop/lld/ElevatorSystem/entities/Elevator.java#70-89) or [O(N^2)](file:///c:/Users/satya/Desktop/lld/ElevatorSystem/entities/Elevator.java#70-89) after every move, we maintain frequency maps.
+
+*   **Data Structures**:
+    *   `Map<Integer, HashMap<Symbol, Integer>> rowCounts`
+    *   `Map<Integer, HashMap<Symbol, Integer>> colCounts`
+    *   `Map<Symbol, Integer> leftDiagCounts`
+    *   `Map<Symbol, Integer> rightDiagCounts`
+*   **Logic**:
+    1.  When Player 'X' moves at [(r, c)](file:///c:/Users/satya/Desktop/lld/ElevatorSystem/entities/Elevator.java#39-69):
+    2.  Increment `rowCounts[r][X]`.
+    3.  Increment `colCounts[c][X]`.
+    4.  If `r==c`, increment `leftDiagCounts[X]`.
+    5.  If `r + c == N-1`, increment `rightDiagCounts[X]`.
+    6.  **Check**: If any count equals `N`, Player 'X' wins.
+*   **Time Complexity**: [O(1)](file:///c:/Users/satya/Desktop/lld/ElevatorSystem/entities/Elevator.java#70-89) per move.
+*   **Space Complexity**: [O(N)](file:///c:/Users/satya/Desktop/lld/ElevatorSystem/entities/Elevator.java#70-89) to store counts.
+
+## 3. Extensibility
+*   **New Winning Rules**: Just implement `WinningStrategy` (e.g., "Corners Win").
+*   **New Bot Difficulty**: Just implement `BotPlayingStrategy`.

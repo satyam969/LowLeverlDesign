@@ -1,0 +1,79 @@
+# Vending Machine Implementation Walkthrough
+
+## 1. Core Architecture
+The Vending Machine is implemented using the **State Design Pattern**, which is the "Gold Standard" for this problem in interviews.
+
+### A. Pattern Breakdown
+*   **State Interface**: Defines all possible interactions ([insertCoin](file:///c:/Users/satya/Desktop/lld/VendingMachine/entities/VendingMachine.java#35-43), [selectProduct](file:///c:/Users/satya/Desktop/lld/VendingMachine/states/IdleState.java#18-22), [dispense](file:///c:/Users/satya/Desktop/lld/VendingMachine/states/State.java#12-13), [refund](file:///c:/Users/satya/Desktop/lld/VendingMachine/entities/VendingMachine.java#95-100)).
+*   **Concrete States**: Each class handles logic for its specific phase:
+    *   **IdleState**: Rejects selection; transitions to [HasMoney](file:///c:/Users/satya/Desktop/lld/VendingMachine/states/HasMoneyState.java#10-71) on coin insertion.
+    *   **HasMoneyState**: Validates product stock and balance.
+    *   **DispensingState**: Deducts inventory, returns change, and resets to [Idle](file:///c:/Users/satya/Desktop/lld/VendingMachine/states/IdleState.java#9-33).
+
+## 2. Key Technical Highlights
+*   **Thread Safety**: [Inventory](file:///c:/Users/satya/Desktop/lld/VendingMachine/entities/Inventory.java#11-69) uses `ConcurrentHashMap` to ensure that stocking and buying don't cause race conditions.
+*   **Decoupling**: The machine doesn't care *how* a product is dispensed; it delegates that logic to the current state.
+*   **Encapsulation**: Coin balance and current state are managed internally and only accessible via state methods.
+
+## 3. Operational Logic: From Interaction to Dispensing
+
+The system follows a strict "Lock -> Validate -> State Change -> Unlock" lifecycle.
+
+### A. The Lifecycle of a Transaction
+1.  **Thread Safe Entry**: When a user inserts a coin or presses a button, the [VendingMachine](file:///c:/Users/satya/Desktop/lld/VendingMachine/entities/VendingMachine.java#13-117) acquires a `ReentrantLock`. This ensures that if another user (or a simulation thread) tries to interact at the *exact same microsecond*, they are queued.
+2.  **State-Based Guarding**: 
+    *   The [VendingMachine](file:///c:/Users/satya/Desktop/lld/VendingMachine/entities/VendingMachine.java#13-117) doesn't have `if` statements for "Is it currently dispensing?". Instead, it just calls `currentState.insertCoin()`.
+    *   If the machine is in [DispensingState](file:///c:/Users/satya/Desktop/lld/VendingMachine/states/DispensingState.java#12-82), that class's implementation of [insertCoin()](file:///c:/Users/satya/Desktop/lld/VendingMachine/entities/VendingMachine.java#35-43) simply prints a "Cannot insert" message and does nothing. 
+    *   This is the pure beauty of the **State Pattern**: logic is distributed.
+3.  **Validation (The "HasMoney" Gate)**:
+    *   Once enough coins are in, the machine stays in [HasMoneyState](file:///c:/Users/satya/Desktop/lld/VendingMachine/states/HasMoneyState.java#10-71).
+    *   When [selectProduct(id, quantity)](file:///c:/Users/satya/Desktop/lld/VendingMachine/states/IdleState.java#18-22) is called:
+        *   It fetches the product from [Inventory](file:///c:/Users/satya/Desktop/lld/VendingMachine/entities/Inventory.java#11-69).
+        *   It validates that `quantity > 0` and `Inventory.hasProduct(id, quantity)` is true.
+        *   It compares `balance >= (price * quantity)`.
+    *   Only if all checks pass does the state transition to [DispensingState](file:///c:/Users/satya/Desktop/lld/VendingMachine/states/DispensingState.java#12-82).
+4.  **Transactional Dispensing (Fail-Safe)**:
+    *   In [DispensingState](file:///c:/Users/satya/Desktop/lld/VendingMachine/states/DispensingState.java#12-82), the [dispenseProduct()](file:///c:/Users/satya/Desktop/lld/VendingMachine/states/State.java#12-13) call performs a final safety check.
+    *   **Atomicity**: The product deduction is `synchronized` in the [Inventory](file:///c:/Users/satya/Desktop/lld/VendingMachine/entities/Inventory.java#11-69) class to prevent race conditions during the final moment of dispensing.
+    *   **Rollback**: If change cannot be calculated OR if stock fails at the last second, the system calls `vm.refundUser()` and aborts the transaction, returning to [IdleState](file:///c:/Users/satya/Desktop/lld/VendingMachine/states/IdleState.java#9-33).
+    *   The machine resets its `selectedProductId` to -1 and returns to [IdleState](file:///c:/Users/satya/Desktop/lld/VendingMachine/states/IdleState.java#9-33), ready for the next person.
+
+### B. Concurrency in Action
+The system handles concurrency at two levels to support **Multi-Screen (Distributed)** scenarios:
+
+1.  **Controller Mutex**: Each [VendingMachine](file:///c:/Users/satya/Desktop/lld/VendingMachine/entities/VendingMachine.java#13-117) session uses a `ReentrantLock` to protect its own state transitions.
+2.  **Stock Reservation (Atomic Hold)**:
+    *   Unlike a simple "deduct on dispense" model, this system uses a **Reserve -> Confirm/Release** lifecycle.
+    *   When a user selects a product, the [Inventory](file:///c:/Users/satya/Desktop/lld/VendingMachine/entities/Inventory.java#11-69) creates a **Reservation**. This item is now "invisible" to other screens even though it hasn't physically dropped yet.
+    *   **Success**: [confirmStock()](file:///c:/Users/satya/Desktop/lld/VendingMachine/entities/Inventory.java#44-54) permanently removes the item.
+    *   **Cancel/Failure**: [releaseStock()](file:///c:/Users/satya/Desktop/lld/VendingMachine/entities/Inventory.java#55-62) returns the item to the available pool.
+
+**Multi-Screen Proof**:
+In [MultiScreenSimulation.java](file:///c:/Users/satya/Desktop/lld/VendingMachine/MultiScreenSimulation.java), we simulate two users on different screens:
+- User 1 reserves the last 2 items.
+- User 2 tries to buy 1 item and is **REJECTED** (Insufficient stock).
+- User 1 cancels their order.
+- User 2 is now able to successfully buy the item.
+
+This ensures **Strict Consistency** across any number of vending machine interfaces.
+
+## 4. Machine Balance & Admin Initialization
+
+A realistic vending machine must handle its own cash vault to provide change.
+*   **Initialization**: The [VendingMachineSimulation](file:///c:/Users/satya/Desktop/lld/VendingMachine/VendingMachineSimulation.java#8-59) simulates an admin "loading" the machine with initial change using `vm.getCashInventory().addCoin(...)`.
+*   **Balance Lifecycle**:
+    1.  **Incoming**: Inserted coins go into a "Temporary User Balance".
+    2.  **Commit**: Upon successful selection, [fulfillPayment()](file:///c:/Users/satya/Desktop/lld/VendingMachine/entities/VendingMachine.java#87-94) moves coins from the temporary balance to the machine's **Physical Cash Vault**.
+    3.  **Outgoing**: Change is calculated and physically deducted from the **Cash Vault**.
+    4.  **Audit**: `vm.getCashInventory().getTotalValue()` can be used to see the total cash currently held by the machine.
+
+## 5. How to Run
+1.  Navigate to `c:\Users\satya\Desktop\lld\VendingMachine`.
+2.  **Compile**:
+    ```bash
+    javac entities/*.java states/*.java strategies/*.java VendingMachineSimulation.java
+    ```
+3.  **Run**:
+    ```bash
+    java VendingMachineSimulation
+    ```

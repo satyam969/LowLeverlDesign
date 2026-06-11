@@ -1,0 +1,16 @@
+Functional Requirements
+The coffee machine should support multiple beverage types (coffee, tea, cappuccino, latte) using the Factory Pattern to create beverage instances.
+The system should manage ingredient inventory (coffee beans, milk, water, sugar) with real-time quantity tracking.
+Each beverage should have a predefined recipe specifying required ingredients and their quantities.
+Before preparing a beverage, the system must validate that all required ingredients are available in sufficient quantities according to the recipe.
+The system should monitor ingredient levels and alert when any ingredient falls below a low threshold (e.g., 20% of capacity) using the Observer Pattern.
+Users should be able to customize beverages by selecting sugar level (none, low, medium, high) and milk type (regular, skim, almond) using the Strategy Pattern.
+The machine should manage its operational states (Idle, Preparing, Dispensing, Maintenance) using the State Pattern with clear state transitions.
+The machine should handle the complete beverage preparation flow: validate recipe → consume ingredients → prepare beverage → dispense beverage → return to Idle.
+If ingredient validation fails, the system should reject the preparation request and provide appropriate feedback.
+The system should support refilling ingredients to restore inventory levels.
+
+
+// from the requirements i can find that i have Beverage As An Interface Which will be implemented by the various beverages 
+// Similarly there will be various factories fror the beverages as well 
+// Also The User Allowed To Customize Options For the Sugar And The Milk So That Would be Implemented By Strategy Pattern 

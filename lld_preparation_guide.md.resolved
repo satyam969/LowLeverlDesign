@@ -1,0 +1,61 @@
+# FAANG/MAANG LLD Preparation Guide (2025/2026)
+
+## 1. Analysis of Your Current Progress
+
+You have covered a very strong core set of problems.
+*   **Done**: `Parking Lot`, `Movie Booking System`, `Rate Limiter`, `Splitwise`.
+*   **Planned**: `Library Management System`, `Elevator System`.
+
+**Verdict**: This list covers about **70-80%** of the standard interview patterns.
+*   **Parking Lot & Movie Booking**: Cover resource allocation, concurrency, and booking logic.
+*   **Rate Limiter**: Covers algorithmic design and system stability patterns (Token Bucket, Leaky Bucket).
+*   **Splitwise**: Covers complex data modeling (graph simplification for debt) and strategy patterns (expense types).
+*   **Elevator**: The ultimate test regarding state machines and scheduling algorithms.
+*   **Library**: Good for basic CRUD and fines/policies management.
+
+## 2. Is This Sufficient?
+For a 4th-year undergrad, this is **excellent**. However, to be "FAANG-proof" in the current market, you need to cover a few more specific archetypes that test different skills:
+1.  **Gaming Logic**: Tests separation of concerns and rules engines.
+2.  **State Machines**: Explicit state management (Vending Machine).
+3.  **Real-time/Event concepts**: Pub-Sub models.
+4.  **Transaction Management**: ACID properties in application code.
+
+## 3. Recommended Additional Problems
+
+To complete your preparation, add these 3-4 specific problems:
+
+### A. Design a Board Game (Chess / Tic-Tac-Toe / Snake & Ladder)
+*   **Why**: Extremely common at Amazon/Google. It tests if you can separate the *Game Board*, the *Pieces*, the *Rules*, and the *Player* logic.
+*   **Key Challenge**: Extensibility. "How easily can we add a new piece type or a new winning rule?"
+*   **Pattern**: Factory Pattern (for pieces), Strategy Pattern (for movement rules), Observer Pattern (for game state updates).
+
+### B. Design a Vending Machine
+*   **Why**: The textbook example of the **State Design Pattern**.
+*   **Key Challenge**: Handling state transitions (Idle -> Selection -> Money Inserted -> Dispense) cleanly without massive `if-else` chains.
+*   **Pattern**: State Pattern.
+
+### C. Design a Payment/Wallet System (or Banking System)
+*   **Why**: Fintech is huge.
+*   **Key Challenge**: **Concurrency**. Handling simultaneous withdrawals, race conditions, and transactional integrity (ACID) at the code level.
+*   **Focus**: `synchronized` blocks, Locks, or database transaction isolation levels.
+
+### D. Design a Notifications System / Message Queue
+*   **Why**: Tests ability to decouple systems.
+*   **Key Challenge**: How to handle different notification types (Email, SMS, Push) and priorities.
+*   **Pattern**: Observer Pattern, Producer-Consumer Pattern.
+
+## 4. Modern LLD Interview Trends (2025/2026)
+*   **Cloud-Native Thinking**: Even in LLD, interviewers appreciate if you mention how your classes might map to microservices or utilize caches (Redis) vs DBs, even if you are just coding classes.
+*   **Concurrency is King**: Expect questions like "What happens if two users try to book the last seat at the exact same millisecond?"
+*   **Extensibility**: You will almost always be asked "requirements changed, now we need to support X". Your code shouldn't need a rewrite.
+
+## 5. Preparation Checklist
+- [ ] **Elevator System** (Prioritize this, focus on Scheduling Algorithm like SCAN/LOOK)
+- [ ] **Chess / Game** (Focus on pure OOP structure)
+- [ ] **Vending Machine** (Focus on State Pattern)
+- [ ] **Concurrency Drill**: Review basic threading primitives in your language of choice.
+
+## 6. Resources
+*   **Refactoring.guru**: The best website for visualizing Design Patterns.
+*   **Head First Design Patterns**: The gold standard book.
+*   **YouTube**: Channels like *Concept&Coding*, *Gaurav Sen*, and *CodeKarle* often have updated LLD playlists.
