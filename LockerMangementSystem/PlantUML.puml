@@ -1,0 +1,196 @@
+@startuml
+
+interface LockerState {
+    + occupyLocker(Locker context, Package pkg, String code): void
+    + vacateLocker(Locker context): Package
+    + maintainLocker(Locker context): void
+}
+
+class AvailableState implements LockerState {
+    + occupyLocker(Locker context, Package pkg, String code): void
+    + vacateLocker(Locker context): Package
+    + maintainLocker(Locker context): void
+}
+
+class OccupiedState implements LockerState {
+    + occupyLocker(Locker context, Package pkg, String code): void
+    + vacateLocker(Locker context): Package
+    + maintainLocker(Locker context): void
+}
+
+class MaintenanceState implements LockerState {
+    + occupyLocker(Locker context, Package pkg, String code): void
+    + vacateLocker(Locker context): Package
+    + maintainLocker(Locker context): void
+}
+
+class Locker {
+    - pkg: Package
+    - LockerId: String
+    - LockerSize: LockerSize
+    - isOccupied: boolean
+    - state: LockerState
+    - Code: String
+    + Locker(lockerId: String, lockerSize: LockerSize)
+    + occupyLocker(pkg: Package, code: String): void
+    + vacateLocker(): Package
+    + getId(): String
+    + setState(state: LockerState): void
+    + setPackage(pkg: Package, code: String): void
+    + getPackage(code: String): Package
+    + maintainLocker(): void
+    + getSize(): LockerSize
+    + removePackage(): void
+    + isOccupied(): boolean
+    + getPackage(): Package
+    + getLockerId(): String
+}
+
+enum LockerSize {
+    SMALL
+    MEDIUM
+    LARGE
+    XL
+}
+
+class Package {
+    - packageId: String
+    - recipientName: String
+    - recipientNumber: String
+    - recipientEmail: String
+    - entryTime: LocalDateTime
+    - size: LockerSize
+    + Package(packageId: String, recipientName: String, recipientNumber: String, recipientEmail: String)
+    + getId(): String
+    + getEntryTime(): LocalDateTime
+    + getPackageId(): String
+    + getSize(): LockerSize
+    + getRecipientName(): String
+    + getRecipientNumber(): String
+    + getRecipientEmail(): String
+}
+
+class AccessCode {
+    - static CHARACTERS: String
+    - static CODE_LENGTH: int
+    - static RANDOM: Random
+    - static instance: AccessCode
+    - static lck: Lock
+    - AccessCode()
+    + static getInstance(): AccessCode
+    + getAccessCode(): String
+}
+
+interface LockerStrategy {
+    + getLockerForPackage(pkg: Package, lockers: Map<String, Locker>): Locker
+}
+
+class BestFitStrategy implements LockerStrategy {
+    + getLockerForPackage(pkg: Package, lockers: Map<String, Locker>): Locker
+}
+
+abstract class Observer {
+    # name: String
+    # contactInfo: String
+    + Observer(name: String, contactInfo: String)
+    + abstract update(message: String): void
+}
+
+class EmailObserver extends Observer {
+    + EmailObserver(name: String, contactInfo: String)
+    + update(message: String): void
+}
+
+class SmsObserver extends Observer {
+    + SmsObserver(name: String, contactInfo: String)
+    + update(message: String): void
+}
+
+class NotificationService {
+    - observers: Map<String, Observer>
+    + addObserver(observer: Observer): String
+    + removeObserver(uid: String): void
+    + notifyAllObservers(message: String): void
+    + notifyObservers(message: String, uids: String...): void
+}
+
+class LockerHub {
+    - Lockers: Map<String, Map<String, Locker>>
+    + LockerHub(Lockers: Map<String, Map<String, Locker>>)
+    + getAllLockers(): Map<String, Map<String, Locker>>
+    + getLockersByArea(area: String): Map<String, Locker>
+    + addLocker(area: String, locker: Locker): void
+}
+
+class PackageManager {
+    - lockerMap: Map<String, String>
+    + PackageManager(lockerMap: Map<String, String>)
+    + addPackageToLocker(packageId: String, lockerId: String): void
+    + getLockerIdForPackage(packageId: String): String
+}
+
+class ExpirationService {
+    - static instance: ExpirationService
+    - ExpirationService()
+    + static getInstance(): ExpirationService
+    + isPackageExpired(pkg: Package): boolean
+}
+
+class LockerService {
+    - lockerHub: LockerHub
+    - lockerStrategy: LockerStrategy
+    - expirationService: ExpirationService
+    + LockerService(lockerHub: LockerHub, lockerStrategy: LockerStrategy, expirationService: ExpirationService)
+    + assignLocker(pkg: Package, area: String, code: String): Locker
+    + vacateLocker(lockerId: String, area: String): Package
+    + maintainLocker(lockerId: String, area: String): void
+    + checkForExpiredPackages(notificationService: NotificationService): void
+}
+
+class LockerSystem {
+    - static instance: LockerSystem
+    - static lck: Lock
+    - lockerService: LockerService
+    - notificationService: NotificationService
+    - searchService: SearchService
+    - accessCode: AccessCode
+    - LockerSystem()
+    + static getInstance(): LockerSystem
+    + initializeSystem(lockerService: LockerService, notificationService: NotificationService, searchService: SearchService): void
+    + assignLocker(pkg: Package, area: String): void
+    + vacateLocker(lockerId: String, area: String): void
+    + maintainLocker(lockerId: String, area: String): void
+    + checkForExpiredPackages(): void
+}
+
+' Relationships
+Locker *-- "1" Package : contains
+Locker *-- "1" LockerSize : has
+Locker *-- "1" LockerState : has
+LockerState <|.. AvailableState
+LockerState <|.. OccupiedState
+LockerState <|.. MaintenanceState
+
+Package --> LockerSize : has
+
+LockerService --> LockerHub : uses
+LockerService --> LockerStrategy : uses
+LockerService --> ExpirationService : uses
+LockerService --> NotificationService : uses
+LockerStrategy <|.. BestFitStrategy
+
+NotificationService --> Observer : manages
+Observer <|-- EmailObserver
+Observer <|-- SmsObserver
+
+SearchService --> PackageManager : uses
+
+LockerSystem --> LockerService : uses
+LockerSystem --> NotificationService : uses
+LockerSystem --> SearchService : uses
+LockerSystem --> AccessCode : uses
+
+LockerHub *-- "*" Locker : manages
+PackageManager *-- "*" Package : maps
+
+@enduml
